@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Literacy – Digitalt Samtaleværktøj</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #f5f1eb;
+    --surface: #faf8f4;
+    --border: #d6cfc2;
+    --text: #1a1714;
+    --muted: #7a6f62;
+    --tech: #1e4d6b;
+    --tech-light: #d6eaf5;
+    --ethics: #5a2d6e;
+    --ethics-light: #ead6f5;
+    --practice: #2d6e3e;
+    --practice-light: #d6f5e0;
+    --need-col: #c8360e;
+    --nice-col: #c87e0e;
+    --needless-col: #7a9e7a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  header {
+    background: var(--text); color: var(--surface);
+    padding: 1.3rem 2rem 1.1rem;
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  }
+  header h1 { font-family: 'DM Serif Display', serif; font-size: 1.8rem; font-weight: 400; line-height: 1.1; }
+  header p { font-size: .8rem; opacity: .6; max-width: 380px; line-height: 1.5; }
+
+  .tab-bar { display: flex; background: #2a2522; padding: 0 2rem; border-bottom: 2px solid #111; }
+  .tab {
+    padding: .65rem 1.3rem; font-size: .8rem; font-weight: 500; color: rgba(255,255,255,.45);
+    cursor: pointer; border-bottom: 3px solid transparent; transition: color .2s, border-color .2s;
+    letter-spacing: .03em; text-transform: uppercase; user-select: none;
+  }
+  .tab:hover { color: rgba(255,255,255,.8); }
+  .tab.active { color: #fff; border-bottom-color: #e8c97a; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* LANDSCAPE */
+  .landscape-wrap { display: grid; grid-template-columns: 250px 1fr; min-height: calc(100vh - 115px); }
+
+  .deck { background: var(--surface); border-right: 1px solid var(--border); padding: 1.1rem; overflow-y: auto; }
+  .deck h2 { font-family: 'DM Serif Display', serif; font-size: 1rem; font-weight: 400; color: var(--muted); margin-bottom: .25rem; }
+  .deck-sub { font-size: .72rem; color: var(--muted); margin-bottom: .9rem; line-height: 1.45; }
+  .cat-section { margin-bottom: .9rem; }
+  .cat-label {
+    display: inline-block; font-size: .65rem; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; padding: .18rem .45rem; border-radius: 3px; margin-bottom: .35rem;
+  }
+  .cat-tech .cat-label { color: var(--tech); background: var(--tech-light); }
+  .cat-ethics .cat-label { color: var(--ethics); background: var(--ethics-light); }
+  .cat-practice .cat-label { color: var(--practice); background: var(--practice-light); }
+  .cat-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+
+  .card-tag {
+    padding: .28rem .58rem; border-radius: 5px; font-size: .75rem; font-weight: 500;
+    cursor: grab; user-select: none; transition: box-shadow .15s, transform .12s, opacity .15s;
+    box-shadow: 0 1px 4px rgba(0,0,0,.1); line-height: 1.3;
+  }
+  .card-tag:hover { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(0,0,0,.15); }
+  .card-tag:active { cursor: grabbing; }
+  .card-tag.dragging { opacity: .25; }
+  .card-tag.tech { background: var(--tech-light); color: var(--tech); border: 1.5px solid #a8cfdf; }
+  .card-tag.ethics { background: var(--ethics-light); color: var(--ethics); border: 1.5px solid #c9a8df; }
+  .card-tag.practice { background: var(--practice-light); color: var(--practice); border: 1.5px solid #a8dfba; }
+
+  /* RINGS */
+  .landscape-area { padding: 1.5rem 1.5rem 1rem; display: flex; flex-direction: column; align-items: center; }
+  .landscape-area > h2 { font-family: 'DM Serif Display', serif; font-size: 1rem; font-weight: 400; color: var(--muted); margin-bottom: 1rem; align-self: flex-start; }
+
+  .rings-wrap { position: relative; width: 540px; height: 380px; flex-shrink: 0; }
+  .rings-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+
+  /*
+    Hit areas: three overlapping ellipses, stacked innermost on top.
+    When you drag over the inner ellipse, it captures the event (z=3).
+    When you drag in the ring between middle and inner, the middle ellipse captures (z=2).
+    The outer ring is caught by the outermost ellipse (z=1).
+    We rely on z-index stacking — inner ellipse is on top so it fires first.
+  */
+  .hit-area {
+    position: absolute; border-radius: 50%;
+    /* debug: uncomment to see zones */
+    /* background: rgba(255,0,0,.1); */
+  }
+  .hit-needless { width: 540px; height: 380px; top: 0px; left: 0px; z-index: 1; }
+  .hit-nice     { width: 372px; height: 262px; top: 59px; left: 84px; z-index: 2; }
+  .hit-need     { width: 202px; height: 142px; top: 119px; left: 169px; z-index: 3; }
+
+  /* Highlight rings when dragging over */
+  .hit-needless.over { outline: 2px dashed var(--needless-col); outline-offset: -4px; border-radius: 50%; }
+  .hit-nice.over     { outline: 2px dashed var(--nice-col);     outline-offset: -4px; border-radius: 50%; }
+  .hit-need.over     { outline: 2px dashed var(--need-col);     outline-offset: -4px; border-radius: 50%; }
+
+  /* Card containers per zone — sit above hit areas */
+  #cards-needless, #cards-nice, #cards-need {
+    position: absolute;
+    display: flex; flex-wrap: wrap; gap: 4px;
+    pointer-events: none; /* let hits areas capture drag events */
+    z-index: 10; /* above hit areas so placed cards are visible */
+  }
+  #cards-need     { top: 123px; left: 173px; width: 194px; height: 134px; align-content: center; justify-content: center; padding: 4px; }
+  #cards-nice     { top: 63px;  left: 88px;  width: 364px; height: 254px; align-content: flex-start; padding: 24px 8px 6px; }
+  #cards-needless { top: 4px;   left: 4px;   width: 532px; height: 372px; align-content: flex-start; padding: 8px; }
+
+  /* placed cards need pointer events for dragging back */
+  #cards-needless .card-tag,
+  #cards-nice .card-tag,
+  #cards-need .card-tag { pointer-events: all; }
+
+  /* Footer */
+  .landscape-footer { display: flex; flex-direction: column; align-items: center; gap: .8rem; margin-top: 1rem; width: 100%; max-width: 540px; }
+  .legend { display: flex; gap: 1.4rem; font-size: .75rem; color: var(--muted); }
+  .legend-item { display: flex; align-items: center; gap: .35rem; }
+  .legend-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .counts-row {
+    display: flex; gap: 1rem; background: var(--text); color: #fff;
+    border-radius: 8px; padding: .7rem 1.4rem; width: 100%;
+    justify-content: space-between; align-items: center;
+  }
+  .count-item { display: flex; flex-direction: column; align-items: center; }
+  .count-num { font-family: 'DM Serif Display', serif; font-size: 1.5rem; line-height: 1; }
+  .count-lbl { font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; opacity: .55; }
+  .btn-row { display: flex; gap: .6rem; flex-wrap: wrap; justify-content: center; }
+  .btn { padding: .4rem .95rem; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: .77rem; cursor: pointer; transition: .15s; }
+  .btn-ghost { background: transparent; border: 1.5px solid var(--border); color: var(--muted); }
+  .btn-ghost:hover { border-color: var(--text); color: var(--text); }
+  .btn-accent { background: #e8c97a; border: none; color: var(--text); font-weight: 600; }
+  .btn-accent:hover { background: #f0d888; }
+
+  /* REFLECTION */
+  .reflection-wrap { padding: 2rem; max-width: 840px; margin: 0 auto; }
+  .ref-intro { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.3rem 1.5rem; margin-bottom: 2rem; font-size: .86rem; line-height: 1.7; color: var(--muted); }
+  .ref-intro strong { color: var(--text); }
+  .ref-section { margin-bottom: 2.2rem; }
+  .ref-section-title { font-family: 'DM Serif Display', serif; font-size: 1.25rem; font-weight: 400; margin-bottom: .9rem; display: flex; align-items: center; gap: .55rem; }
+  .sec-badge { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; font-size: .7rem; font-weight: 700; flex-shrink: 0; }
+  .sb-gen  { background: #f5e6c8; color: #7a5a10; }
+  .sb-tech { background: var(--tech-light); color: var(--tech); }
+  .sb-eth  { background: var(--ethics-light); color: var(--ethics); }
+  .sb-prac { background: var(--practice-light); color: var(--practice); }
+  .q-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .9rem 1.1rem .75rem; margin-bottom: .7rem; }
+  .q-num { font-size: .67rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: .3rem; }
+  .q-text { font-size: .86rem; font-weight: 500; line-height: 1.6; margin-bottom: .55rem; }
+  .q-area { width: 100%; min-height: 68px; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: .55rem .75rem; font-family: 'DM Sans', sans-serif; font-size: .8rem; color: var(--text); resize: vertical; line-height: 1.6; transition: border-color .2s; }
+  .q-area:focus { outline: none; border-color: #7a6f62; }
+  .q-area::placeholder { color: #b0a898; }
+  .export-wrap { text-align: center; margin-bottom: 3rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>AI Literacy<br><span style="font-style:italic;opacity:.7;font-size:1.05rem;">Digitalt Samtaleværktøj</span></h1>
+  </div>
+  <p>Placér begrebskortene i de tre zoner og reflektér over prioriteringen med jeres team.</p>
+</header>
+
+<div class="tab-bar">
+  <div class="tab active" onclick="showTab('landscape')">① Landscabet – Prioritér</div>
+  <div class="tab" onclick="showTab('reflection')">② Refleksionsspørgsmål</div>
+</div>
+
+<!-- LANDSCAPE -->
+<div id="view-landscape" class="view active">
+  <div class="landscape-wrap">
+    <div class="deck">
+      <h2>Begrebskort</h2>
+      <p class="deck-sub">Træk kortene ind i de tre zoner. Slip et kort tilbage her for at fjerne det fra landscabet.</p>
+      <div id="deck-content"></div>
+    </div>
+
+    <div class="landscape-area">
+      <h2>Landscabet — slip et kort i den zone det tilhører</h2>
+
+      <div class="rings-wrap" id="rings-wrap">
+        <!-- Decorative SVG -->
+        <svg class="rings-svg" viewBox="0 0 540 380" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="270" cy="190" rx="266" ry="186" fill="rgba(200,190,180,.07)" stroke="#b0a898" stroke-width="1.5"/>
+          <ellipse cx="270" cy="190" rx="182" ry="127" fill="rgba(200,190,180,.07)" stroke="#b0a898" stroke-width="1.5"/>
+          <ellipse cx="270" cy="190" rx="97"  ry="67"  fill="rgba(200,190,180,.07)" stroke="#b0a898" stroke-width="1.5"/>
+          <text x="270" y="372" text-anchor="middle" font-family="DM Sans,sans-serif" font-size="9" font-weight="700" fill="#7a9e7a" letter-spacing="1.5">NEEDLESS TO KNOW</text>
+          <text x="270" y="70"  text-anchor="middle" font-family="DM Sans,sans-serif" font-size="9" font-weight="700" fill="#c87e0e" letter-spacing="1.5">NICE TO KNOW</text>
+          <text x="270" y="130" text-anchor="middle" font-family="DM Sans,sans-serif" font-size="9" font-weight="700" fill="#c8360e" letter-spacing="1.5">NEED TO KNOW</text>
+          <text x="270" y="188" text-anchor="middle" font-family="DM Serif Display,serif" font-size="13" fill="#1a1714" font-style="italic">AI literacy</text>
+        </svg>
+
+        <!-- Hit areas: innermost has highest z-index, so drops on inner ellipse → need zone -->
+        <div class="hit-area hit-needless" id="hit-needless" data-zone="needless"></div>
+        <div class="hit-area hit-nice"     id="hit-nice"     data-zone="nice"></div>
+        <div class="hit-area hit-need"     id="hit-need"     data-zone="need"></div>
+
+        <!-- Card display layers -->
+        <div id="cards-needless"></div>
+        <div id="cards-nice"></div>
+        <div id="cards-need"></div>
+      </div>
+
+      <div class="landscape-footer">
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--need-col)"></div>Need to know</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--nice-col)"></div>Nice to know</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--needless-col)"></div>Needless to know</div>
+        </div>
+        <div class="counts-row">
+          <div class="count-item"><div class="count-num" id="cnt-need">0</div><div class="count-lbl">Need</div></div>
+          <div class="count-item"><div class="count-num" id="cnt-nice">0</div><div class="count-lbl">Nice</div></div>
+          <div class="count-item"><div class="count-num" id="cnt-needless">0</div><div class="count-lbl">Needless</div></div>
+          <div class="count-item"><div class="count-num" id="cnt-deck">0</div><div class="count-lbl">Uplacerede</div></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="resetAll()">↺ Nulstil</button>
+          <button class="btn btn-accent" onclick="showTab('reflection')">→ Gå til refleksion</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- REFLECTION -->
+<div id="view-reflection" class="view">
+  <div class="reflection-wrap">
+    <div class="ref-intro" id="ref-intro">
+      <strong>Brug refleksionsspørgsmålene</strong> som udgangspunkt for en fælles dialog efter I har placeret begrebskortene i landscabet. Der er ingen rigtige svar — målet er at kvalificere jeres fælles forståelse af, hvilken AI literacy I ønsker at understøtte hos de studerende.
+    </div>
+
+    <div class="ref-section">
+      <div class="ref-section-title"><div class="sec-badge sb-gen">①</div>Om jeres prioritering</div>
+      <div class="q-card"><div class="q-num">Spørgsmål 1</div><div class="q-text">Hvilke begreber endte i "Need to know"? Hvad fortæller det om den AI literacy-profil I ønsker at give jeres studerende?</div><textarea class="q-area" placeholder="Skriv jeres svar her…"></textarea></div>
+      <div class="q-card"><div class="q-num">Spørgsmål 2</div><div class="q-text">Var der begreber, I var uenige om at placere? Hvad afslører denne uenighed om jeres faglige og pædagogiske ståsted?</div><textarea class="q-area" placeholder="Skriv jeres svar her…"></textarea></div>
+      <div class="q-card"><div class="q-num">Spørgsmål 3</div><div class="q-text">Mangler der begreber, som er vigtige for netop jeres uddannelse og fagområde? Hvilke ville I tilføje?</div><textarea class="q-area" placeholder="Skriv jeres svar her…"></textarea></div>
+    </div>
+
+    <div class="ref-section">
+      <div class="ref-section-title"><div class="sec-badge sb-tech">T</div>Teknologiforståelse / Professionsinformatik</div>
+      <div class="q-card"><div class="q-num">Spørgsmål 4</div><div class="q-text">Hvor meget skal studerende vide om, <em>hvordan</em> en AI-model fungerer teknisk (f.eks. tokenisering, stokastiske modeller), for at de kan anvende den kritisk og professionelt?</div><textarea class="q-area" placeholder="Skriv jeres svar her…"></textarea></div>
+      <div class="q-card"><div class="q-num">Spørgsmål 5</div><div class="q-text">Effektiv prompting forudsætter en forståelse for, at AI arbejder ud fra statistiske sandsynligheder. Hvordan kan I didaktisere dette, så det ikke føles for teknisk for de studerende?</div><textarea class="q-area" placeholder="Skriv jeres svar her…"></textarea></div>
+    </div>
+
+    <div class="ref-section">
+      <div class="ref-section-title"><div class="sec-badge sb-eth">E</div>Etisk forståelse</div>
+      <div class="q-card"><div class="q-num">Spørgsmål 6</div><div class="q-text">Hvornår er brugen af AI et udtryk for "cognitiv offloading" frem for læring? Og hvornår er det en legitim faglig sparring? Hvor går grænsen i jeres uddannelseskontekst?</div><textarea class="q-area" placeholder="Skriv jeres svar her…"></textarea></div>
+      <div class="q-card"><div class="q-num">Spørgsmål 7</div><div class="q-text">Begrebet "menneskeliggørelse af teknologi" beskriver en tendens til at tillægge AI menneskelige egenskaber. Hvilke konsekvenser kan det have for de studerendes faglige dømmekraft?</div><textarea class="q-area" placeholder="Skriv jeres svar her…"></textarea></div>
+      <div class="q-card"><div class="q-num">Spørgsmål 8</div><div class="q-text">Klimaaftryk og dataetik kom måske i "Needless to know" hos jer. Hvornår er det relevant at inddrage dem — og hvornår er det en distraktion fra kernen?</div><textarea class="q-area" placeholder="Skriv jeres svar her…"></textarea></div>
+    </div>
+
+    <div class="ref-section">
+      <div class="ref-section-title"><div class="sec-badge sb-prac">P</div>Praksisforståelse</div>
+      <div class="q-card"><div class="q-num">Spørgsmål 9</div><div class="q-text">Promptingkompetencer og iteration er nært forbundne. Hvilke konkrete opgavetyper kan I bruge til at øve disse kompetencer i jeres fag?</div><textarea class="q-area" placeholder="Skriv jeres svar her…"></textarea></div>
+      <div class="q-card"><div class="q-num">Spørgsmål 10</div><div class="q-text">"Refleksiv friktion" handler om bevidst at skabe modstand mod AI-output for at styrke kritisk tænkning. Hvilke didaktiske greb kan skabe denne friktion i jeres undervisning?</div><textarea class="q-area" placeholder="Skriv jeres svar her…"></textarea></div>
+    </div>
+
+    <div class="ref-section">
+      <div class="ref-section-title"><div class="sec-badge sb-gen">⑤</div>Fra dialog til retningslinje</div>
+      <div class="q-card"><div class="q-num">Spørgsmål 11</div><div class="q-text">Jeres placering udgør et billede af den AI literacy-profil I ønsker. Hvordan skal dette afspejles i jeres uddannelses AI-retningslinjer?</div><textarea class="q-area" placeholder="Skriv jeres svar her…"></textarea></div>
+      <div class="q-card"><div class="q-num">Spørgsmål 12</div><div class="q-text">De tre trekanter (Teknologiforståelse, Etisk forståelse, Praksisforståelse) er gensidigt afhængige. Hvilke koblingspunkter ser I som særligt vigtige i jeres specifikke uddannelse?</div><textarea class="q-area" placeholder="Skriv jeres svar her…"></textarea></div>
+    </div>
+
+    <div class="export-wrap">
+      <button class="btn btn-accent" style="padding:.65rem 2rem;font-size:.84rem;" onclick="exportAnswers()">↓ Eksportér svar som tekst</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const CARDS = [
+  { id:'generativ-ai',       label:'Generativ AI',                    cat:'tech' },
+  { id:'tokenisering',       label:'Tokenisering',                    cat:'tech' },
+  { id:'neuralt-netvaerk',   label:'Neuralt netværk',                 cat:'tech' },
+  { id:'traeningsdata',      label:'Træningsdata',                    cat:'tech' },
+  { id:'sprogmodel',         label:'Sprogmodel (LLM)',                cat:'tech' },
+  { id:'maskinlaering',      label:'Maskinlæring',                    cat:'tech' },
+  { id:'algoritmer-bias',    label:'Algoritmer og bias',              cat:'tech' },
+  { id:'stokastisk',         label:'Stokastisk model',                cat:'tech' },
+  { id:'menneskeliggoerelse',label:'Menneskeliggørelse af teknologi', cat:'ethics' },
+  { id:'bias',               label:'Bias',                            cat:'ethics' },
+  { id:'ophavsret',          label:'Brud på ophavsret',               cat:'ethics' },
+  { id:'dataetik',           label:'Dataetik',                        cat:'ethics' },
+  { id:'klimaaftryk',        label:'Klimaaftryk',                     cat:'ethics' },
+  { id:'cognitiv-offloading',label:'Cognitiv offloading',             cat:'ethics' },
+  { id:'snyd-laering',       label:'Snyd vs. læring',                 cat:'ethics' },
+  { id:'prompting',          label:'Prompting / prompt engineering',  cat:'practice' },
+  { id:'reverse-eng',        label:'Reverse engineering',             cat:'practice' },
+  { id:'vibe-coding',        label:'Vibe coding',                     cat:'practice' },
+  { id:'valg-vaerktoj',      label:'Valg af AI-værktøj',              cat:'practice' },
+  { id:'iteration',          label:'Iteration',                       cat:'practice' },
+  { id:'refleksiv-friktion', label:'Refleksiv friktion',              cat:'practice' },
+  { id:'sokratisk-samtale',  label:'Sokratisk samtale',               cat:'practice' },
+  { id:'kildekritik',        label:'Kildekritik af output',           cat:'practice' },
+  { id:'refleksion-proces',  label:'Refleksion over proces',          cat:'practice' },
+];
+
+const placement = {};
+CARDS.forEach(c => placement[c.id] = null);
+let dragId = null;
+
+// ── Render ──────────────────────────────────────────────────────────────
+function renderAll() {
+  renderDeck();
+  ['need','nice','needless'].forEach(renderZone);
+  updateCounts();
+}
+
+function renderDeck() {
+  const el = document.getElementById('deck-content');
+  el.innerHTML = '';
+  const groups = { tech:[], ethics:[], practice:[] };
+  CARDS.filter(c => !placement[c.id]).forEach(c => groups[c.cat].push(c));
+  const labels = { tech:'Teknologiforståelse', ethics:'Etisk forståelse', practice:'Praksisforståelse' };
+  Object.entries(groups).forEach(([cat, cards]) => {
+    if (!cards.length) return;
+    const sec = document.createElement('div');
+    sec.className = `cat-section cat-${cat}`;
+    const lbl = document.createElement('div');
+    lbl.className = 'cat-label';
+    lbl.textContent = labels[cat];
+    const tags = document.createElement('div');
+    tags.className = 'cat-tags';
+    cards.forEach(c => tags.appendChild(makeTag(c)));
+    sec.appendChild(lbl);
+    sec.appendChild(tags);
+    el.appendChild(sec);
+  });
+}
+
+function renderZone(zone) {
+  const el = document.getElementById('cards-' + zone);
+  el.innerHTML = '';
+  CARDS.filter(c => placement[c.id] === zone).forEach(c => el.appendChild(makeTag(c)));
+}
+
+function makeTag(c) {
+  const el = document.createElement('div');
+  el.className = `card-tag ${c.cat}`;
+  el.textContent = c.label;
+  el.draggable = true;
+  el.dataset.id = c.id;
+  el.addEventListener('dragstart', e => {
+    dragId = e.currentTarget.dataset.id;
+    setTimeout(() => e.currentTarget.classList.add('dragging'), 0);
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  el.addEventListener('dragend', e => e.currentTarget.classList.remove('dragging'));
+  return el;
+}
+
+// ── Drop zones ───────────────────────────────────────────────────────────
+function setupDropZones() {
+  // The three hit areas (innermost has highest z-index → captures drops first)
+  ['need','nice','needless'].forEach(zone => {
+    const hit = document.getElementById('hit-' + zone);
+
+    hit.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.stopPropagation(); // stop outer zones from also firing
+      e.dataTransfer.dropEffect = 'move';
+      hit.classList.add('over');
+    });
+
+    hit.addEventListener('dragleave', e => {
+      // Only remove highlight if we're leaving to outside this element
+      if (!hit.contains(e.relatedTarget)) {
+        hit.classList.remove('over');
+      }
+    });
+
+    hit.addEventListener('drop', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      hit.classList.remove('over');
+      if (!dragId) return;
+      const prev = placement[dragId];
+      placement[dragId] = zone;
+      if (prev) renderZone(prev);
+      renderZone(zone);
+      renderDeck();
+      updateCounts();
+      dragId = null;
+    });
+  });
+
+  // Deck — drop to remove from landscape
+  const deck = document.getElementById('deck-content');
+  deck.addEventListener('dragover', e => e.preventDefault());
+  deck.addEventListener('drop', e => {
+    e.preventDefault();
+    if (!dragId) return;
+    const prev = placement[dragId];
+    placement[dragId] = null;
+    if (prev) renderZone(prev);
+    renderDeck();
+    updateCounts();
+    dragId = null;
+  });
+}
+
+function updateCounts() {
+  const c = { need:0, nice:0, needless:0, deck:0 };
+  CARDS.forEach(card => { const z = placement[card.id]; z ? c[z]++ : c.deck++; });
+  ['need','nice','needless','deck'].forEach(k => {
+    document.getElementById('cnt-' + k).textContent = c[k];
+  });
+}
+
+function resetAll() {
+  CARDS.forEach(c => placement[c.id] = null);
+  renderAll();
+}
+
+// ── Tabs ─────────────────────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelectorAll('.tab')[name === 'landscape' ? 0 : 1].classList.add('active');
+  if (name === 'reflection') buildRefContext();
+}
+
+function buildRefContext() {
+  const groups = { need:[], nice:[], needless:[] };
+  CARDS.forEach(c => { if (placement[c.id]) groups[placement[c.id]].push(c.label); });
+  const hasAny = Object.values(groups).some(g => g.length);
+  let extra = '';
+  if (hasAny) {
+    extra = `<br><br><strong>Jeres aktuelle prioritering:</strong><br>
+      🔴 <strong>Need to know</strong>: ${groups.need.join(', ') || '—'}<br>
+      🟡 <strong>Nice to know</strong>: ${groups.nice.join(', ') || '—'}<br>
+      🟢 <strong>Needless to know</strong>: ${groups.needless.join(', ') || '—'}`;
+  }
+  document.getElementById('ref-intro').innerHTML =
+    `<strong>Brug refleksionsspørgsmålene</strong> som udgangspunkt for en fælles dialog efter I har placeret begrebskortene i landscabet. Der er ingen rigtige svar — målet er at kvalificere jeres fælles forståelse af, hvilken AI literacy I ønsker at understøtte hos de studerende.${extra}`;
+}
+
+function exportAnswers() {
+  const groups = { need:[], nice:[], needless:[] };
+  CARDS.forEach(c => { if (placement[c.id]) groups[placement[c.id]].push(c.label); });
+  let txt = 'AI LITERACY – SAMTALEVÆRKTØJ\n' + '='.repeat(40) + '\n\n';
+  txt += `Need to know: ${groups.need.join(', ') || '—'}\nNice to know: ${groups.nice.join(', ') || '—'}\nNeedless to know: ${groups.needless.join(', ') || '—'}\n\n`;
+  txt += 'REFLEKSIONSSVAR:\n' + '-'.repeat(40) + '\n\n';
+  document.querySelectorAll('.q-card').forEach((card, i) => {
+    const q = card.querySelector('.q-text').textContent.trim();
+    const a = card.querySelector('textarea').value.trim();
+    txt += `Spørgsmål ${i+1}: ${q}\nSvar: ${a || '(ikke besvaret)'}\n\n`;
+  });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([txt], {type:'text/plain;charset=utf-8'}));
+  a.download = 'ai-literacy-refleksion.txt';
+  a.click();
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  renderAll();
+  setupDropZones();
+});
+</script>
+</body>
+</html>
